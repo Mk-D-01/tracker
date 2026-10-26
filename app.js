@@ -17,6 +17,7 @@ const emptyState = () => ({
   notes: {},     // phaseId -> string
   activity: {},  // "YYYY-MM-DD" -> number of actions that day
   overrides: {}, // phaseId -> true when manually unlocked
+  hideDone: false, // hide completed tasks in the phase view
   selected: "p1",
 });
 
@@ -233,13 +234,23 @@ function renderPhase() {
     );
   }
 
-  const groups = phase.groups.map((g) =>
-    el("div", { class: "group" },
+  const isDone = (t) => taskFraction(t) === 1;
+  const doneCount = allTasks(phase).filter(isDone).length;
+  const doneToggle = el("button", {
+    class: "btn",
+    "aria-pressed": state.hideDone ? "true" : "false",
+    onclick: () => mutate(() => { state.hideDone = !state.hideDone; }, { activity: false }),
+  }, state.hideDone ? `Show completed (${doneCount})` : `Hide completed (${doneCount})`);
+
+  const groups = phase.groups.map((g) => {
+    const visible = state.hideDone ? g.tasks.filter((t) => !isDone(t)) : g.tasks;
+    return el("div", { class: "group" },
       el("div", { class: "group-head" },
         el("span", {}, g.name),
         el("span", {}, `${percentOf(g.tasks)}%`)),
-      g.tasks.map(renderTask),
-    ));
+      visible.length ? visible.map(renderTask) : el("p", { class: "muted small" }, "✓ All done"),
+    );
+  });
 
   const notes = el("div", { class: "notes" },
     el("h3", {}, "Notes & resources"),
@@ -252,17 +263,21 @@ function renderPhase() {
 
   const section = $("phase");
   section.className = `phase${status === "locked" ? " locked-phase" : ""}`;
-  section.replaceChildren(
+  // replaceChildren() doesn't flatten arrays or skip nulls (it would print
+  // "null[object HTMLDivElement]…"), so build the list explicitly.
+  section.replaceChildren(...[
     el("div", { class: "phase-head" },
       el("h2", {}, phase.title),
       el("span", { class: `badge ${status}` }, `${badgeText} · ${phase.weeks}`)),
     el("p", { class: "goal" }, `Goal: ${phase.goal}`),
     bar(pct),
-    el("p", { class: "muted small" }, `${pct}% complete`),
+    el("div", { class: "phase-tools" },
+      el("p", { class: "muted small" }, `${pct}% complete`),
+      doneToggle),
     lockBox,
-    groups,
+    ...groups,
     notes,
-  );
+  ].filter(Boolean));
 }
 
 function renderHeatmap() {

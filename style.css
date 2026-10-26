@@ -304,3 +304,6 @@ h3 { font-size: 0.95rem; margin-bottom: 10px; }
   transition: opacity 0.25s, transform 0.25s;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.phase-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.phase-tools .btn[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
