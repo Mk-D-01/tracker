@@ -35,7 +35,16 @@ function load() {
   return emptyState();
 }
 
+// Notes are typed a key at a time; batch those writes instead of hitting
+// localStorage on every keystroke.
+let saveTimer;
+function saveSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(save, 400);
+}
+
 function save() {
+  clearTimeout(saveTimer);
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   } catch (e) {
@@ -99,6 +108,9 @@ function streak() {
 
 // ---------- mutations ----------
 
+// Short haptic tick on Android; silently ignored where unsupported.
+const buzz = (pattern = 12) => navigator.vibrate?.(pattern);
+
 // Wraps every change: remembers which phases were locked, applies the change,
 // then announces any phase that just unlocked.
 function mutate(fn, { activity = true } = {}) {
@@ -117,6 +129,7 @@ function toggleTask(id, checked) {
     else delete state.done[id];
   });
   const task = findTask(id);
+  if (checked) buzz(task.checkpoint ? [20, 60, 20] : 12);
   if (checked && task.checkpoint) toast("★ Checkpoint cleared!");
 }
 
@@ -125,7 +138,10 @@ function setCount(id, value) {
   const n = Math.max(0, Math.floor(Number(value) || 0));
   const wasComplete = (state.counts[id] || 0) >= task.target;
   mutate(() => { state.counts[id] = n; });
-  if (!wasComplete && n >= task.target) toast(`🎯 Target reached: ${task.text}`);
+  if (!wasComplete && n >= task.target) {
+    buzz([20, 60, 20]);
+    toast(`🎯 Target reached: ${task.text}`);
+  }
 }
 
 // ---------- rendering ----------
@@ -160,6 +176,20 @@ function renderStats() {
   $("overall-fill").style.width = `${overall}%`;
 }
 
+const isPhone = () => matchMedia("(max-width: 860px)").matches;
+
+// On phones the phase strip scrolls sideways; keep the selected phase visible.
+// (scrollLeft rather than scrollIntoView, which would also scroll the page.)
+function centerSelectedNode() {
+  const path = $("path");
+  const node = path.querySelector(".node.selected");
+  if (!node) return;
+  path.scrollTo({
+    left: node.offsetLeft - (path.clientWidth - node.offsetWidth) / 2,
+    behavior: "smooth",
+  });
+}
+
 function renderPath() {
   const path = $("path");
   path.replaceChildren(...ROADMAP.map((p, i) => {
@@ -167,7 +197,13 @@ function renderPath() {
     const icon = status === "done" ? "✓" : status === "locked" ? "🔒" : i + 1;
     return el("button", {
       class: `node ${status}${state.selected === p.id ? " selected" : ""}`,
-      onclick: () => { state.selected = p.id; save(); render(); },
+      onclick: () => {
+        state.selected = p.id;
+        save();
+        render();
+        centerSelectedNode();
+        if (isPhone()) $("phase").scrollIntoView({ behavior: "smooth", block: "start" });
+      },
       "aria-current": state.selected === p.id ? "step" : false,
     },
       el("span", { class: "dot" }, String(icon)),
@@ -187,6 +223,7 @@ function renderTask(task) {
         el("button", { "aria-label": "Decrease", onclick: () => setCount(task.id, n - 1) }, "−"),
         el("input", {
           id: `in-${task.id}`, type: "number", min: "0", value: String(n),
+          inputmode: "numeric", enterkeyhint: "done",
           onchange: (e) => setCount(task.id, e.target.value),
         }),
         el("button", { "aria-label": "Increase", onclick: () => setCount(task.id, n + 1) }, "+"),
@@ -256,7 +293,8 @@ function renderPhase() {
     el("h3", {}, "Notes & resources"),
     el("textarea", {
       placeholder: "Links, what you learned, what confused you…",
-      oninput: (e) => { state.notes[phase.id] = e.target.value; save(); },
+      oninput: (e) => { state.notes[phase.id] = e.target.value; saveSoon(); },
+      onblur: save,
     }),
   );
   notes.querySelector("textarea").value = state.notes[phase.id] || "";
@@ -339,7 +377,9 @@ $("btn-export").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
   const a = el("a", { href: URL.createObjectURL(blob), download: `roadmap-progress-${dayKey()}.json` });
   a.click();
-  URL.revokeObjectURL(a.href);
+  // Android Chrome starts the download asynchronously; revoking right away
+  // can cancel it.
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 });
 
 $("file-import").addEventListener("change", async (e) => {
@@ -365,4 +405,16 @@ $("btn-reset").addEventListener("click", () => {
   render();
 });
 
+// Android may kill a backgrounded tab without warning; flush pending notes.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") save();
+});
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW registration failed:", e));
+  });
+}
+
 render();
+centerSelectedNode();

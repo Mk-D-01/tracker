@@ -2,9 +2,19 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="description" content="Track your AI/ML learning roadmap, phase by phase.">
   <title>AI Roadmap Tracker</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
+  <script src="roadmap.js" defer></script>
+  <script src="app.js" defer></script>
 </head>
 <body>
   <header class="top">
@@ -43,7 +53,7 @@
         <p class="muted small">Progress is saved in this browser. Export a backup now and then.</p>
         <div class="btn-row">
           <button class="btn" id="btn-export">Export</button>
-          <label class="btn">Import<input type="file" id="file-import" accept="application/json" hidden></label>
+          <label class="btn">Import<input type="file" id="file-import" accept="application/json,.json" hidden></label>
           <button class="btn danger" id="btn-reset">Reset</button>
         </div>
       </div>
@@ -51,8 +61,5 @@
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="roadmap.js"></script>
-  <script src="app.js"></script>
 </body>
 </html>
